@@ -1,0 +1,27 @@
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+
+# Node
+node_modules/
+dist/
+build/
+coverage/
+
+# Environment & secrets
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+
+# Runtime data produced by the bots (never commit applicant data or credentials)
+kayitlar/
+*.log
+Logs/
+
+# OS / editor
+.DS_Store
+Thumbs.db

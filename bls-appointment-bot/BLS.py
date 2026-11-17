@@ -1,4 +1,144 @@
-NotFoundError:
+#!/usr/bin/env python3
+"""BLS Algeria Booking Simulator & Safe Integration Template.
+
+Reconstructed file. The originally uploaded BLS.py was truncated mid-file;
+everything above the ``except FileNotFoundError:`` handler was missing. The
+missing pieces (imports, constants, BLSRecord, generate/check handlers and the
+booking stubs) were rebuilt so the documented CLI works end-to-end in
+simulation mode. The CLI section below the truncation point is the original
+uploaded code, unchanged.
+"""
+
+import argparse
+import logging
+import random
+from concurrent.futures import ThreadPoolExecutor
+from dataclasses import dataclass
+from datetime import date, timedelta
+
+from colorama import Fore, Style, init
+
+APP_NAME = "BLS Algeria Booking Simulator"
+GENERATED_FILE = "bls_records.txt"
+VALID_OUTPUT_FILE = "booked_sim.txt"
+LOG_FILE = "bls_simulator.log"
+
+REAL_INTEGRATION_ENABLED = False
+
+init(autoreset=True)
+
+logging.basicConfig(
+    filename=LOG_FILE,
+    level=logging.INFO,
+    format="%(asctime)s %(levelname)s %(message)s",
+)
+
+BANNER = r"""
++-----------------------------------------------------+
+|        BLS   ALGERIA   BOOKING   SIMULATOR          |
+|          (safe / offline simulation mode)           |
++-----------------------------------------------------+
+"""
+
+
+def banner():
+    print(Fore.CYAN + BANNER + Style.RESET_ALL)
+    print(Fore.CYAN + f"== {APP_NAME} ==" + Style.RESET_ALL)
+    print(Fore.YELLOW + "Simulation mode. No real bookings are made unless a real "
+          "integration is explicitly implemented and enabled." + Style.RESET_ALL)
+
+
+@dataclass
+class BLSRecord:
+    code: str
+    expiry: str
+    ref: str
+    balance: int
+
+    def to_line(self):
+        return f"{self.code}|{self.expiry}|{self.ref}|${self.balance}"
+
+    @classmethod
+    def from_line(cls, line):
+        code, expiry, ref, bal = line.split("|")
+        return cls(code, expiry, ref, int(bal.lstrip("$")))
+
+
+# ---------------------------
+# Record generation (simulation)
+# ---------------------------
+def handle_generate(args):
+    start = date(args.start_year, 1, 1)
+    records = []
+    for _ in range(args.count):
+        code = f"BLS-{random.randint(100000, 999999)}"
+        expiry = (start + timedelta(days=random.randint(0, 730))).isoformat()
+        ref = f"REF{random.randint(10000, 99999)}"
+        balance = random.choice([0, 25, 50, 90, 120])
+        records.append(BLSRecord(code, expiry, ref, balance))
+    with open(GENERATED_FILE, "w", encoding="utf-8") as fh:
+        for record in records:
+            fh.write(record.to_line() + "\n")
+    print(Fore.GREEN + f"Generated {len(records)} records into {GENERATED_FILE}" + Style.RESET_ALL)
+
+
+def check_record(record):
+    try:
+        expired = date.fromisoformat(record.expiry) < date.today()
+    except ValueError:
+        expired = True
+    return record, (not expired and record.balance > 0)
+
+
+# ---------------------------
+# Record checking (simulation, multi-threaded)
+# ---------------------------
+def handle_simulate_check(args):
+    input_file = args.input or GENERATED_FILE
+    try:
+        with open(input_file, "r", encoding="utf-8") as fh:
+            lines = [ln.strip() for ln in fh if ln.strip()]
+    except FileNotFoundError:
+        print(Fore.RED + "Input file not found. Generate records first or provide a file path." + Style.RESET_ALL)
+        return
+
+    records = [BLSRecord.from_line(ln) for ln in lines]
+    valid = []
+    workers = max(1, args.threads)
+    with ThreadPoolExecutor(max_workers=workers) as pool:
+        for record, ok in pool.map(check_record, records):
+            if ok:
+                valid.append(record)
+
+    print(Fore.GREEN + f"Checked {len(records)} records with {workers} threads: "
+          f"{len(valid)} valid, {len(records) - len(valid)} invalid" + Style.RESET_ALL)
+    for record in valid[:10]:
+        print(Fore.CYAN + f"  VALID {record.code} expiry={record.expiry} ref={record.ref} bal=${record.balance}" + Style.RESET_ALL)
+    if len(valid) > 10:
+        print(Fore.CYAN + f"  ... and {len(valid) - 10} more" + Style.RESET_ALL)
+
+
+# ---------------------------
+# Booking integration
+# ---------------------------
+def real_book_request(record, user_data=None):
+    if not REAL_INTEGRATION_ENABLED:
+        raise RuntimeError("Real integration is disabled (REAL_INTEGRATION_ENABLED=False).")
+    raise NotImplementedError("Implement the real BLS booking API call here.")
+
+
+def real_book_request_simulation_placeholder(record, user_data=None):
+    if random.random() < 0.5:
+        return {"status": "success", "appointment_id": f"APT-{random.randint(100000, 999999)}"}
+    return {"status": "failure", "message": "No slots available (simulation)."}
+
+
+def handle_attempt_book(args):
+    input_file = args.input or GENERATED_FILE
+    try:
+        with open(input_file, "r", encoding="utf-8") as fh:
+            lines = [ln.strip() for ln in fh if ln.strip()]
+    except FileNotFoundError:
         print(Fore.RED + "Input file not found. Generate records first or provide a file path." + Style.RESET_ALL)
         return
     # For demonstration, we'll attempt N random records
